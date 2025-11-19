@@ -28,7 +28,7 @@ st.markdown("""
     border-radius: 16px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.15);
     margin-top: 20px;
-    color: #212121;  /* Текст тёмный для читаемости */
+    color: #212121;  /* Тёмный текст для читаемости */
 }
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
@@ -53,10 +53,9 @@ st.markdown("""
 # FUNCTIONS
 # ------------------------------------------------------
 def load_lottiefile(filepath: str):
-    
-    """Load a Lottie animation from JSON file safely."""
+    """Load a Lottie animation safely."""
     if os.path.exists(filepath):
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     return None
 
@@ -83,51 +82,15 @@ def add_points(label):
 # DATA
 # ------------------------------------------------------
 BINS = {
-    "plastic": {
-        "name": "Plastic", 
-        "color": "#FFEB3B", 
-        "hint": "Rinse bottles and remove caps. Throw into the yellow plastic container ♻️",
-        "anim": "animations/plastic.json"
-    },
-    "paper": {
-        "name": "Paper", 
-        "color": "#2196F3", 
-        "hint": "Remove tape or staples. Place in blue paper container 📄",
-        "anim": "animations/paper.json"
-    },
-    "glass": {
-        "name": "Glass", 
-        "color": "#4CAF50", 
-        "hint": "Separate colored and clear glass. Throw into green glass container 🥂",
-        "anim": "animations/glass.json"
-    },
-    "metal": {
-        "name": "Metal", 
-        "color": "#9E9E9E", 
-        "hint": "Crush cans to save space. Use grey metal container 🥫",
-        "anim": "animations/metal.json"
-    },
-    "cardboard": {
-        "name": "Cardboard", 
-        "color": "#795548", 
-        "hint": "Flatten boxes and remove food residues. Use brown cardboard container 📦",
-        "anim": "animations/cardboard.json"
-    },
-    "trash": {
-        "name": "Mixed Waste", 
-        "color": "#212121", 
-        "hint": "Only items that cannot be recycled. Use black mixed waste container 🗑️",
-        "anim": "animations/trash.json"
-    },
-    "rupolice": {
-        "name": "хуйня позорная",
-        "color": "#121215",
-        "hint": "Этого мусора можете выкинуть в любой мусор",
-        "anim": "https://gist.github.com/Wiliamins/0bb54b90e95813f0c608788e2cbe343c"
-    }
+    "plastic": {"name": "Plastic", "color": "#FFEB3B", "hint": "Rinse bottles and remove caps. Throw into yellow plastic container ♻️", "anim": "animations/plastic.json"},
+    "paper": {"name": "Paper", "color": "#2196F3", "hint": "Remove tape/staples. Place in blue paper container 📄", "anim": "animations/paper.json"},
+    "glass": {"name": "Glass", "color": "#4CAF50", "hint": "Separate colored and clear glass. Throw into green glass container 🥂", "anim": "animations/glass.json"},
+    "metal": {"name": "Metal", "color": "#9E9E9E", "hint": "Crush cans. Use grey metal container 🥫", "anim": "animations/metal.json"},
+    "cardboard": {"name": "Cardboard", "color": "#795548", "hint": "Flatten boxes, remove food residue. Brown cardboard container 📦", "anim": "animations/cardboard.json"},
+    "trash": {"name": "Mixed Waste", "color": "#212121", "hint": "Only items that cannot be recycled. Black mixed waste container 🗑️", "anim": "animations/trash.json"},
 }
 
-POINTS = {"plastic": 12, "paper": 10, "glass": 15, "metal": 14, "cardboard": 12, "trash": 0, "rupolice": 500}
+POINTS = {"plastic": 12, "paper": 10, "glass": 15, "metal": 14, "cardboard": 12, "trash": 0}
 LEVELS = [(0, "Starter"), (100, "Eco Helper"), (250, "Green Guardian"), (500, "Planet Hero")]
 
 # ------------------------------------------------------
@@ -145,7 +108,7 @@ st.title("♻️ EcoVision AI")
 st.caption("Smart waste classifier with AI, rewards & sustainability tools.")
 
 # ------------------------------------------------------
-# BACKEND INPUT
+# BACKEND URL
 # ------------------------------------------------------
 backend_url = "https://ecovisionai-1tkk.onrender.com"
 
@@ -203,7 +166,7 @@ if st.session_state.last_result:
         st.rerun()
 
 # ------------------------------------------------------
-# AIR QUALITY SECTION
+# AIR QUALITY
 # ------------------------------------------------------
 st.header("🌫️ Air Quality Near You")
 st.caption("Powered by open environmental data.")
@@ -222,9 +185,9 @@ if st.button("Check Air Quality"):
     except Exception as e:
         st.error(f"Error: {e}")
 
-
+# ------------------------------------------------------
 # SIDEBAR — GAMIFICATION
-
+# ------------------------------------------------------
 game = st.session_state.game
 lvl_num, lvl_name = get_level(game["points"])
 st.sidebar.header(f"Level {lvl_num}: {lvl_name}")
