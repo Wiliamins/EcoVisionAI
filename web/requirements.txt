@@ -1,0 +1,6 @@
+streamlit
+requests
+plotly
+folium
+streamlit-folium
+streamlit_lottie
