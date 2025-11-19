@@ -147,7 +147,7 @@ st.caption("Smart waste classifier with AI, rewards & sustainability tools.")
 # ------------------------------------------------------
 # BACKEND INPUT
 # ------------------------------------------------------
-backend_url = st.text_input("Backend URL:", "http://127.0.0.1:8000")
+backend_url = "https://ecovisionai-1tkk.onrender.com"
 
 # ------------------------------------------------------
 # IMAGE UPLOAD & ANALYSIS
