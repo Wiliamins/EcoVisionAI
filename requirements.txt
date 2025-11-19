@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+tensorflow-cpu==2.16.1
+pillow
+numpy
+pandas
+requests
+python-multipart
+aiofiles
+streamlit
+requests
+plotly
+folium
+streamlit-folium
+streamlit_lottie
