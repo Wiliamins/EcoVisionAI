@@ -88,6 +88,7 @@ BINS = {
     "metal": {"name": "Metal", "color": "#9E9E9E", "hint": "Crush cans. Use grey metal container 🥫", "anim": "animations/metal.json"},
     "cardboard": {"name": "Cardboard", "color": "#795548", "hint": "Flatten boxes, remove food residue. Brown cardboard container 📦", "anim": "animations/cardboard.json"},
     "trash": {"name": "Mixed Waste", "color": "#212121", "hint": "Only items that cannot be recycled. Black mixed waste container 🗑️", "anim": "animations/trash.json"},
+    "rupolice": {"name": "Хуйня позорная", "color": "#FF6F61", "hint": "Этого мусора можете выбросить в BIO отходы!", "anim": "https://gist.github.com/Wiliamins/0bb54b90e95813f0c608788e2cbe343c"}
 }
 
 POINTS = {"plastic": 12, "paper": 10, "glass": 15, "metal": 14, "cardboard": 12, "trash": 0}
