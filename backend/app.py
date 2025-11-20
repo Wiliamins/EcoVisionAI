@@ -8,8 +8,6 @@ import tensorflow as tf
 import json
 import requests
 import os
-import cv2
-from skimage.metrics import structural_similarity as ssim
 
 app = FastAPI()
 
@@ -46,7 +44,47 @@ def preprocess_image(image_bytes):
 
 
 # ---------------------------
-# API ENDPOINTS
+# SIMPLE RUPOLICE DETECTOR (без OpenCV)
+# ---------------------------
+
+def is_rupolice_pil(image_bytes, threshold=0.92):
+    """
+    Определение ruPolice по похожести гистограмм (без cv2).
+    Работает на любых серверах, даже Render.
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = img.resize((256, 256))
+        hist = np.array(img.histogram(), dtype=float)
+        hist /= hist.sum()
+
+        folder = "rupolice"
+        if not os.path.exists(folder):
+            return False
+
+        for file in os.listdir(folder):
+            path = os.path.join(folder, file)
+            try:
+                sample = Image.open(path).convert("RGB").resize((256, 256))
+                hist2 = np.array(sample.histogram(), dtype=float)
+                hist2 /= hist2.sum()
+
+                score = np.sum(np.minimum(hist, hist2))  # пересечение гистограмм
+
+                if score > threshold:
+                    return True
+
+            except:
+                continue
+
+        return False
+
+    except:
+        return False
+
+
+# ---------------------------
+# API
 # ---------------------------
 
 @app.get("/air_quality")
@@ -69,54 +107,13 @@ def air_quality(lat: float, lon: float):
         return {"success": False, "error": str(e)}
 
 
-def is_rupolice(image_path, threshold=0.55):
-    """
-    Проверяет похожесть фотографии на примеры ruPolice.
-    threshold = 0.55 — средняя чувствительность
-    """
-    try:
-        query = cv2.imread(image_path)
-        if query is None:
-            return False
-
-        query = cv2.resize(query, (300, 300))
-        query_gray = cv2.cvtColor(query, cv2.COLOR_BGR2GRAY)
-
-        base_dir = "rupolice"
-        if not os.path.exists(base_dir):
-            return False
-
-        for file in os.listdir(base_dir):
-            candidate_path = os.path.join(base_dir, file)
-            sample = cv2.imread(candidate_path)
-            if sample is None:
-                continue
-
-            sample = cv2.resize(sample, (300, 300))
-            sample_gray = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)
-
-            score = ssim(query_gray, sample_gray)
-
-            if score > threshold:
-                return True
-
-        return False
-
-    except Exception:
-        return False
-
-
 @app.post("/classify")
 async def classify(file: UploadFile = File(...)):
 
-    file_bytes = await file.read()  # читаем один раз
+    file_bytes = await file.read()  # читаем 1 раз
 
-    temp_path = f"temp_{file.filename}"
-    with open(temp_path, "wb") as buffer:
-        buffer.write(file_bytes)
-
-    if is_rupolice(temp_path):
-        os.remove(temp_path)
+    # ---- ruPolice check ----
+    if is_rupolice_pil(file_bytes):
         return {
             "label": "⚠️ Хуйня позорная",
             "message": "Этого мусора можете выбросить в BIO отходы!",
@@ -129,30 +126,24 @@ async def classify(file: UploadFile = File(...)):
         preds = model.predict(tensor)[0]  # shape [6]
         top3_ids = preds.argsort()[-3:][::-1]
 
-        top3 = []
-        for idx in top3_ids:
-            top3.append({
-                "label": id_to_label[idx],
-                "confidence": float(preds[idx])
-            })
+        top3 = [{
+            "label": id_to_label[idx],
+            "confidence": float(preds[idx])
+        } for idx in top3_ids]
 
         best_id = int(np.argmax(preds))
         best_label = id_to_label[best_id]
-        best_conf = float(preds[best_id])
-
-        os.remove(temp_path)
 
         return {
             "success": True,
             "result": {
                 "label": best_label,
-                "confidence": best_conf,
+                "confidence": float(preds[best_id]),
                 "top": top3
             }
         }
 
     except Exception as e:
-        os.remove(temp_path)
         return {"success": False, "error": str(e)}
 
 
