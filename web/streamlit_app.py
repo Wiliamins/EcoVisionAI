@@ -6,9 +6,6 @@ from streamlit_lottie import st_lottie
 import json
 import os
 
-# ------------------------------------------------------
-# PAGE CONFIG
-# ------------------------------------------------------
 st.set_page_config(
     page_title="EcoVision AI",
     page_icon="♻️",
@@ -16,9 +13,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ------------------------------------------------------
-# CUSTOM CSS + ANIMATIONS
-# ------------------------------------------------------
 st.markdown("""
 <style>
 .result-card {
@@ -28,7 +22,7 @@ st.markdown("""
     border-radius: 16px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.15);
     margin-top: 20px;
-    color: #212121;  /* Тёмный текст для читаемости */
+    color: #212121;
 }
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
@@ -49,14 +43,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------
-# FUNCTIONS
-# ------------------------------------------------------
 def load_lottiefile(filepath: str):
-    """Load a Lottie animation safely."""
+    if not filepath:
+        return None
+    # local file
     if os.path.exists(filepath):
-        with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    # if it's a URL, try fetching
+    if filepath.startswith("http"):
+        try:
+            r = requests.get(filepath, timeout=5)
+            r.raise_for_status()
+            return r.json()
+        except Exception:
+            return None
     return None
 
 def get_level(points):
@@ -78,9 +82,6 @@ def add_points(label):
     game["level"], _ = get_level(game["points"])
     return earned
 
-# ------------------------------------------------------
-# DATA
-# ------------------------------------------------------
 BINS = {
     "plastic": {"name": "Plastic", "color": "#FFEB3B", "hint": "Rinse bottles and remove caps. Throw into yellow plastic container ♻️", "anim": "animations/plastic.json"},
     "paper": {"name": "Paper", "color": "#2196F3", "hint": "Remove tape/staples. Place in blue paper container 📄", "anim": "animations/paper.json"},
@@ -88,34 +89,23 @@ BINS = {
     "metal": {"name": "Metal", "color": "#9E9E9E", "hint": "Crush cans. Use grey metal container 🥫", "anim": "animations/metal.json"},
     "cardboard": {"name": "Cardboard", "color": "#795548", "hint": "Flatten boxes, remove food residue. Brown cardboard container 📦", "anim": "animations/cardboard.json"},
     "trash": {"name": "Mixed Waste", "color": "#212121", "hint": "Only items that cannot be recycled. Black mixed waste container 🗑️", "anim": "animations/trash.json"},
-    "rupolice": {"name": "Хуйня позорная", "color": "#FF6F61", "hint": "Этого мусора можете выбросить в BIO отходы!", "anim": "https://gist.github.com/Wiliamins/0bb54b90e95813f0c608788e2cbe343c"}
+    "rupolice": {"name": "Хуйня позорная", "color": "#FF6F61", "hint": "Этого мусора можете выбросить в BIO отходы!", "anim": None}
 }
 
-POINTS = {"plastic": 12, "paper": 10, "glass": 15, "metal": 14, "cardboard": 12, "trash": 0}
+POINTS = {"plastic": 12, "paper": 10, "glass": 15, "metal": 14, "cardboard": 12, "trash": 0, "rupolice": 0}
 LEVELS = [(0, "Starter"), (100, "Eco Helper"), (250, "Green Guardian"), (500, "Planet Hero")]
 
-# ------------------------------------------------------
-# SESSION STATE
-# ------------------------------------------------------
 if "game" not in st.session_state:
     st.session_state.game = {"points": 0, "level": 1, "streak": 0, "last_date": None, "stats": {}}
 if "last_result" not in st.session_state:
     st.session_state.last_result = None
 
-# ------------------------------------------------------
-# TITLE
-# ------------------------------------------------------
 st.title("♻️ EcoVision AI")
 st.caption("Smart waste classifier with AI, rewards & sustainability tools.")
 
-# ------------------------------------------------------
-# BACKEND URL
-# ------------------------------------------------------
-backend_url = "https://ecovisionai-1tkk.onrender.com"
+# backend url - editable
+backend_url = st.text_input("Backend URL:", "https://ecovisionai-1tkk.onrender.com")
 
-# ------------------------------------------------------
-# IMAGE UPLOAD & ANALYSIS
-# ------------------------------------------------------
 uploaded = st.file_uploader("Upload a waste photo", type=["jpg","jpeg","png"])
 if uploaded:
     st.image(uploaded, width=260)
@@ -125,27 +115,45 @@ if uploaded:
                 files = {"file": ("photo.jpg", uploaded.getvalue(), "image/jpeg")}
                 resp = requests.post(f"{backend_url}/classify", files=files, timeout=20)
                 data = resp.json()
-                
+            except Exception as e:
+                st.error(f"Backend error: {e}")
+                data = None
+
+            if not data:
+                pass
+            else:
                 if not data.get("success"):
                     st.error("AI error: " + str(data.get("error")))
                 else:
-                    label = data["result"]["label"]
-                    confidence = data["result"]["confidence"]
-                    earned = add_points(label)
-                    bin_info = BINS.get(label, BINS["trash"])
-                    st.session_state.last_result = {
-                        "label": label,
-                        "confidence": confidence,
-                        "earned": earned,
-                        "bin": bin_info,
-                        "recommendation": bin_info["hint"]
-                    }
-            except Exception as e:
-                st.error(f"Backend error: {e}")
+                    # unified: data["result"] expected
+                    res = data.get("result", {})
+                    label_key = res.get("label", "trash")
+                    # map label to our BINS key if needed
+                    if label_key == "rupolice":
+                        bin_info = BINS["rupolice"]
+                        confidence = float(res.get("confidence", 1.0))
+                        earned = add_points("rupolice")
+                        st.session_state.last_result = {
+                            "label": "rupolice",
+                            "confidence": confidence,
+                            "earned": earned,
+                            "bin": bin_info,
+                            "recommendation": bin_info["hint"]
+                        }
+                    else:
+                        # normal class predicted by backend
+                        label = res.get("label", "trash")
+                        confidence = float(res.get("confidence", 0.0))
+                        earned = add_points(label if label in POINTS else "trash")
+                        bin_info = BINS.get(label, BINS["trash"])
+                        st.session_state.last_result = {
+                            "label": label,
+                            "confidence": confidence,
+                            "earned": earned,
+                            "bin": bin_info,
+                            "recommendation": bin_info["hint"]
+                        }
 
-# ------------------------------------------------------
-# RESULT CARD + LOTTIE ANIMATION
-# ------------------------------------------------------
 if st.session_state.last_result:
     r = st.session_state.last_result
     st.markdown(f"""
@@ -156,19 +164,19 @@ if st.session_state.last_result:
       <p><b>Where to throw:</b> {r['recommendation']}</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Lottie animation
-    anim_data = load_lottiefile(r["bin"]["anim"])
+
+    anim_data = load_lottiefile(r["bin"].get("anim"))
     if anim_data:
-        st_lottie(anim_data, height=150)
-    
+        try:
+            st_lottie(anim_data, height=150)
+        except Exception:
+            pass
+
     if st.button("Close"):
         st.session_state.last_result = None
         st.rerun()
 
-# ------------------------------------------------------
-# AIR QUALITY
-# ------------------------------------------------------
+# Air quality
 st.header("🌫️ Air Quality Near You")
 st.caption("Powered by open environmental data.")
 
@@ -186,9 +194,7 @@ if st.button("Check Air Quality"):
     except Exception as e:
         st.error(f"Error: {e}")
 
-# ------------------------------------------------------
-# SIDEBAR — GAMIFICATION
-# ------------------------------------------------------
+# Sidebar
 game = st.session_state.game
 lvl_num, lvl_name = get_level(game["points"])
 st.sidebar.header(f"Level {lvl_num}: {lvl_name}")
@@ -196,4 +202,4 @@ st.sidebar.metric("Points", game["points"])
 st.sidebar.metric("Daily streak", game["streak"])
 st.sidebar.write("### Statistics")
 for k,v in game["stats"].items():
-    st.sidebar.write(f"• {BINS[k]['name']}: {v}")
+    st.sidebar.write(f"• {BINS.get(k, {'name':k})['name']}: {v}")
