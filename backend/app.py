@@ -34,8 +34,24 @@ with open(LABELS_PATH, "r") as f:
 id_to_label = {v: k for k, v in class_map.items()}
 
 
+# ---------------------------
+# FIX: SAFE IMAGE READER
+# ---------------------------
+def safe_open_image(image_bytes):
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.verify()  # check integrity
+        img = Image.open(io.BytesIO(image_bytes))  # reopen after verify
+        return img.convert("RGB")
+    except Exception as e:
+        return None
+
+
 def preprocess_image(image_bytes):
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = safe_open_image(image_bytes)
+    if img is None:
+        raise ValueError("Invalid or unreadable image")
+
     img = img.resize((224, 224))
     img = np.array(img, dtype=np.float32)
     img = img / 255.0
@@ -48,12 +64,11 @@ def preprocess_image(image_bytes):
 # ---------------------------
 
 def is_rupolice_pil(image_bytes, threshold=0.92):
-    """
-    Определение ruPolice по похожести гистограмм (без cv2).
-    Работает на любых серверах, даже Render.
-    """
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = safe_open_image(image_bytes)
+        if img is None:
+            return False
+
         img = img.resize((256, 256))
         hist = np.array(img.histogram(), dtype=float)
         hist /= hist.sum()
@@ -69,7 +84,7 @@ def is_rupolice_pil(image_bytes, threshold=0.92):
                 hist2 = np.array(sample.histogram(), dtype=float)
                 hist2 /= hist2.sum()
 
-                score = np.sum(np.minimum(hist, hist2))  # пересечение гистограмм
+                score = np.sum(np.minimum(hist, hist2))
 
                 if score > threshold:
                     return True
@@ -110,7 +125,7 @@ def air_quality(lat: float, lon: float):
 @app.post("/classify")
 async def classify(file: UploadFile = File(...)):
 
-    file_bytes = await file.read()  # читаем 1 раз
+    file_bytes = await file.read()
 
     # ---- ruPolice check ----
     if is_rupolice_pil(file_bytes):
@@ -120,10 +135,11 @@ async def classify(file: UploadFile = File(...)):
             "confidence": 1.0
         }
 
+    # ---- classification ----
     try:
         tensor = preprocess_image(file_bytes)
 
-        preds = model.predict(tensor)[0]  # shape [6]
+        preds = model.predict(tensor)[0]
         top3_ids = preds.argsort()[-3:][::-1]
 
         top3 = [{
@@ -144,7 +160,11 @@ async def classify(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to process image"
+        }
 
 
 if __name__ == "__main__":
