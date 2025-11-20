@@ -8,6 +8,7 @@ import tensorflow as tf
 import json
 import requests
 import os
+import cv2
 from skimage.metrics import structural_similarity as ssim
 
 app = FastAPI()
@@ -34,6 +35,7 @@ with open(LABELS_PATH, "r") as f:
 
 id_to_label = {v: k for k, v in class_map.items()}
 
+
 def preprocess_image(image_bytes):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = img.resize((224, 224))
@@ -42,8 +44,9 @@ def preprocess_image(image_bytes):
     img = np.expand_dims(img, axis=0)
     return img
 
+
 # ---------------------------
-# AIR QUALITY ENDPOINT
+# API ENDPOINTS
 # ---------------------------
 
 @app.get("/air_quality")
@@ -51,6 +54,7 @@ def air_quality(lat: float, lon: float):
     try:
         url = f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={lon}&hourly=us_aqi"
         resp = requests.get(url).json()
+
         aqi = resp["hourly"]["us_aqi"][0]
 
         desc = "Good"
@@ -60,12 +64,10 @@ def air_quality(lat: float, lon: float):
         if aqi > 200: desc = "Hazardous"
 
         return {"success": True, "aqi": aqi, "description": desc}
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ---------------------------
-# RUPOLICE CHECK
-# ---------------------------
 
 def is_rupolice(image_path, threshold=0.55):
     """
@@ -73,9 +75,12 @@ def is_rupolice(image_path, threshold=0.55):
     threshold = 0.55 — средняя чувствительность
     """
     try:
+        query = cv2.imread(image_path)
+        if query is None:
+            return False
 
-        query = Image.open(image_path).convert("L").resize((300, 300))
-        query_arr = np.array(query)
+        query = cv2.resize(query, (300, 300))
+        query_gray = cv2.cvtColor(query, cv2.COLOR_BGR2GRAY)
 
         base_dir = "rupolice"
         if not os.path.exists(base_dir):
@@ -83,28 +88,33 @@ def is_rupolice(image_path, threshold=0.55):
 
         for file in os.listdir(base_dir):
             candidate_path = os.path.join(base_dir, file)
-            sample = Image.open(candidate_path).convert("L").resize((300, 300))
-            sample_arr = np.array(sample)
-            score = ssim(query_arr, sample_arr)
+            sample = cv2.imread(candidate_path)
+            if sample is None:
+                continue
+
+            sample = cv2.resize(sample, (300, 300))
+            sample_gray = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)
+
+            score = ssim(query_gray, sample_gray)
+
             if score > threshold:
                 return True
+
         return False
+
     except Exception:
         return False
 
-# ---------------------------
-# CLASSIFY ENDPOINT
-# ---------------------------
 
 @app.post("/classify")
 async def classify(file: UploadFile = File(...)):
-    # читаем файл один раз
-    img_bytes = await file.read()
-    temp_path = f"temp_{file.filename}"
-    with open(temp_path, "wb") as f:
-        f.write(img_bytes)
 
-    # проверка rupolice
+    file_bytes = await file.read()  # читаем один раз
+
+    temp_path = f"temp_{file.filename}"
+    with open(temp_path, "wb") as buffer:
+        buffer.write(file_bytes)
+
     if is_rupolice(temp_path):
         os.remove(temp_path)
         return {
@@ -114,11 +124,17 @@ async def classify(file: UploadFile = File(...)):
         }
 
     try:
-        tensor = preprocess_image(img_bytes)
-        preds = model.predict(tensor)[0]
+        tensor = preprocess_image(file_bytes)
+
+        preds = model.predict(tensor)[0]  # shape [6]
         top3_ids = preds.argsort()[-3:][::-1]
 
-        top3 = [{"label": id_to_label[idx], "confidence": float(preds[idx])} for idx in top3_ids]
+        top3 = []
+        for idx in top3_ids:
+            top3.append({
+                "label": id_to_label[idx],
+                "confidence": float(preds[idx])
+            })
 
         best_id = int(np.argmax(preds))
         best_label = id_to_label[best_id]
@@ -139,9 +155,6 @@ async def classify(file: UploadFile = File(...)):
         os.remove(temp_path)
         return {"success": False, "error": str(e)}
 
-# ---------------------------
-# RUN SERVER
-# ---------------------------
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
