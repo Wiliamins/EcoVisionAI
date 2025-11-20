@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+tensorflow==2.20.0
+pillow
+numpy
+pandas
+requests
+python-multipart
+aiofiles
+streamlit
+requests
+plotly
+folium
+streamlit-folium
+streamlit_lottie
+opencv-python-headless==4.9.0.80
+scikit-image==0.22.0
