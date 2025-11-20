@@ -7,6 +7,10 @@ import io
 import tensorflow as tf
 import json
 import requests
+import os
+import cv2
+import numpy as np
+from skimage.metrics import structural_similarity as ssim
 
 app = FastAPI()
 
@@ -63,10 +67,60 @@ def air_quality(lat: float, lon: float):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def is_rupolice(image_path, threshold=0.55):
+    """
+    Проверяет похожесть фотографии на примеры ruPolice.
+    threshold = 0.55 — средняя чувствительность
+    """
+    try:
+        query = cv2.imread(image_path)
+        if query is None:
+            return False
+
+        query = cv2.resize(query, (300, 300))
+        query_gray = cv2.cvtColor(query, cv2.COLOR_BGR2GRAY)
+
+        base_dir = "rupolice"
+        if not os.path.exists(base_dir):
+            return False
+
+        for file in os.listdir(base_dir):
+            candidate_path = os.path.join(base_dir, file)
+            sample = cv2.imread(candidate_path)
+            if sample is None:
+                continue
+
+            sample = cv2.resize(sample, (300, 300))
+            sample_gray = cv2.cvtColor(sample, cv2.COLOR_BGR2GRAY)
+
+            # сравнение
+            score = ssim(query_gray, sample_gray)
+
+            if score > threshold:
+                return True
+
+        return False
+
+    except Exception:
+        return False
 
 
 @app.post("/classify")
 async def classify(file: UploadFile = File(...)):
+
+    temp_path = f"temp_{file.filename}"
+    
+    with open(temp_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    if is_rupolice(temp_path):
+        os.remove(temp_path)
+        return {
+            "label": "⚠️ Хуйня позорная",
+            "message": "Этого мусора можете выбросить в BIO отходы!",
+            "confidence": 1.0
+        }
+
     try:
         img_bytes = await file.read()
 
