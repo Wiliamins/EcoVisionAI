@@ -73,9 +73,6 @@ def is_rupolice(image_path, threshold=0.55):
     threshold = 0.55 — средняя чувствительность
     """
     try:
-        from PIL import Image
-        import numpy as np
-        from skimage.metrics import structural_similarity as ssim
 
         query = Image.open(image_path).convert("L").resize((300, 300))
         query_arr = np.array(query)
