@@ -104,7 +104,7 @@ st.title("♻️ EcoVision AI")
 st.caption("Smart waste classifier with AI, rewards & sustainability tools.")
 
 # backend url - editable
-backend_url = st.text_input("Backend URL:", "https://ecovisionai-1tkk.onrender.com")
+backend_url = st.text_input("Backend URL:", "https://ecovisionai-3xex.onrender.com")
 
 uploaded = st.file_uploader("Upload a waste photo", type=["jpg","jpeg","png"])
 if uploaded:
